@@ -1,34 +1,31 @@
 from sly import Lexer
 from sly import Parser
-from ctypes import c_int, addressof
-import encode_class
+import sys
 
-## EDIT ON THIS PAGE
-
-class CalcLexer(Lexer):
+class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, NUMBER, PLUS, TIMES, MINUS, DIVIDE, LPAREN, RPAREN, COMMA,
-               LT, LE, GT, GE, EQ, NE, IF, THEN, ELSE, ASSIGN, SEMI, PRINT, FOR}
+    tokens = { NAME, STRING, NUMBER, WHILE, IF, ELSE, PRINT, FOR,
+               PLUS, MINUS, TIMES, DIVIDE, ASSIGN,
+               EQ, LT, LE, GT, GE, NE }
+
+
+    literals = { '(', ')', '{', '}', ';', ","}
 
     # String containing ignored characters
     ignore = ' \t'
 
     # Regular expression rules for tokens
-    PLUS = r'\+'
-    MINUS = r'-'
-    TIMES = r'\*'
-    DIVIDE = r'/'
-    LPAREN = r'\('
-    RPAREN = r'\)'
-    COMMA = r','
-    LE = r'<='
-    LT = r'<'
-    GE = r'>='
-    GT = r'>'
-    EQ = r'=='
-    NE = r'!='
-    ASSIGN = r'='
-    SEMI = ';'
+    PLUS    = r'\+'
+    MINUS   = r'-'
+    TIMES   = r'\*'
+    DIVIDE  = r'/'
+    EQ      = r'=='
+    ASSIGN  = r'='
+    LE      = r'<='
+    LT      = r'<'
+    GE      = r'>='
+    GT      = r'>'
+    NE      = r'!='
 
     @_(r'\d+')
     def NUMBER(self, t):
@@ -36,16 +33,14 @@ class CalcLexer(Lexer):
         return t
 
     # Identifiers and keywords
-    ID = r'[a-zA-Z_][a-zA-Z0-9_]*'
-    ID['if'] = IF
-    ID['else'] = ELSE
-    ID['while'] = WHILE
-    ID['print'] = PRINT
-    ID['for'] = FOR
+    NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
+    NAME['if'] = IF
+    NAME['else'] = ELSE
+    NAME['while'] = WHILE
+    NAME['for'] = FOR
+    NAME['print'] = PRINT
 
-    # Ignored pattern
-    ignore_newline = r'\n+'
-    ignore_comment = r'#.*\n'
+    ignore_comment = r'\#.*'
 
     # Line number tracking
     @_(r'\n+')
@@ -55,158 +50,195 @@ class CalcLexer(Lexer):
     def error(self, t):
         print('Line %d: Bad character %r' % (self.lineno, t.value[0]))
         self.index += 1
-
-class CalcParser(Parser):
-    # Get the token list from the lexer (required)
-    tokens = CalcLexer.tokens
-
-    precedence = (
-        ('left', IF, ELSE),
-        ('left', EQ, NE, LT, LE, GT, GE),
-        ('left', PLUS, MINUS),
-        ('left', TIMES, DIVIDE),
-        ('right', UMINUS)
-        )
-
-    def __init__(self):
-        self.functions = { }
-        self.module = encode_class.Module()
-
-    @_('functions function')
-    def functions(self, p):
+  
+    # Comment token 
+    @_(r'//.*') 
+    def COMMENT(self, t): 
         pass
+  
 
-    @_('function')
-    def functions(self, p):
+class BasicParser(Parser): 
+    #tokens are passed from lexer to parser 
+    tokens = BasicLexer.tokens 
+  
+    precedence = ( 
+        ('left', PLUS, MINUS), 
+        ('left', TIMES, DIVIDE), 
+        ('right', 'UMINUS'), 
+    ) 
+  
+    def __init__(self): 
+        self.env = { } 
+  
+    @_('') 
+    def statement(self, p): 
         pass
-
-    @_('function_decl ASSIGN expr SEMI')
-    def function(self, p):
-        self.function.block_end()
-        self.function = None
-
-    @_('NAME LPAREN parms RPAREN')
-    def function_decl(self, p):
-        self.locals = { name:n for n, name in enumerate(p.parms) }
-        self.function = self.module.add_function(p.NAME, [encode_class.i32]*len(p.parms), [encode_class.i32])
-        self.functions[p.NAME] = self.function
-
-    @_('NAME LPAREN RPAREN')
-    def function_decl(self, p):
-        self.locals = { }
-        self.function = self.module.add_function(p.NAME, [], [encode_class.i32])
-        self.functions[p.NAME] = self.function
-
-    @_('parms COMMA parm')
-    def parms(self, p):
-        return p.parms + [p.parm]
-
-    @_('parm')
-    def parms(self, p):
-        return [ p.parm ]
-
-    @_('NAME')
-    def parm(self, p):
-        return p.NAME
-
-    @_('expr PLUS expr')
-    def expr(self, p):
-        self.function.i32.add()
-
-    @_('expr MINUS expr')
-    def expr(self, p):
-        self.function.i32.sub()
-
-    @_('expr TIMES expr')
-    def expr(self, p):
-        self.function.i32.mul()
-
-    @_('expr DIVIDE expr')
-    def expr(self, p):
-        self.function.i32.div_s()
-
-    @_('expr LT expr')
-    def expr(self, p):
-        self.function.i32.lt_s()
-
-    @_('expr LE expr')
-    def expr(self, p):
-        self.function.i32.le_s()
-
-    @_('expr GT expr')
-    def expr(self, p):
-        self.function.i32.gt_s()
-
-    @_('expr GE expr')
-    def expr(self, p):
-        self.function.i32.ge_s()
-
-    @_('expr EQ expr')
-    def expr(self, p):
-        self.function.i32.eq()
-
-    @_('expr NE expr')
-    def expr(self, p):
-        self.function.i32.ne()
-
-    @_('MINUS expr %prec UMINUS')
-    def expr(self, p):
-        pass
-
-    @_('LPAREN expr RPAREN')
-    def expr(self, p):
-        pass
-
-    @_('NUMBER')
-    def expr(self, p):
-        self.function.i32.const(int(p.NUMBER))
-
-    @_('NAME')
-    def expr(self, p):
-        self.function.local.get(self.locals[p.NAME])
-
-    @_('NAME LPAREN exprlist RPAREN')
-    def expr(self, p):
-        self.function.call(self.functions[p.NAME])
-
-    @_('NAME LPAREN RPAREN')
-    def expr(self, p):
-        self.function.call(self.functions[p.NAME])
-
-    @_('IF expr thenexpr ELSE expr')
-    def expr(self, p):
-        self.function.block_end()
-
-    @_('exprlist COMMA expr')
-    def exprlist(self, p):
-        pass
-
-    @_('expr')
-    def exprlist(self, p):
-        pass
-
-    @_('startthen expr')
-    def thenexpr(self, p):
-        self.function.else_start()
+  
+    @_('var_assign') 
+    def statement(self, p): 
+        return p.var_assign 
+  
+    @_('NAME ASSIGN expr') 
+    def var_assign(self, p): 
+        return ('var_assign', p.NAME, p.expr) 
+  
+    @_('NAME ASSIGN STRING') 
+    def var_assign(self, p): 
+        return ('var_assign', p.NAME, p.STRING) 
+  
+    @_('expr') 
+    def statement(self, p): 
+        return (p.expr) 
+  
+    @_('expr PLUS expr') 
+    def expr(self, p): 
+        return ('add', p.expr0, p.expr1) 
+  
+    @_('expr MINUS expr') 
+    def expr(self, p): 
+        return ('sub', p.expr0, p.expr1) 
+  
+    @_('expr TIMES expr') 
+    def expr(self, p): 
+        return ('mul', p.expr0, p.expr1) 
+  
+    @_('expr DIVIDE expr') 
+    def expr(self, p): 
+        return ('div', p.expr0, p.expr1) 
+  
+    @_('"-" expr %prec UMINUS') 
+    def expr(self, p): 
+        return -p.expr 
     
-    @_('THEN')
-    def startthen(self, p):
-        self.function.if_start(encode_class.i32)
+    @_('WHILE expr "," statement')
+    def while_loop(self, p):
+        return ('while', p.expr, p.statement)
+    
+    @_('while_loop')
+    def while_loop(self, p):
+        return p.while_loop
+  
+    @_('NAME') 
+    def expr(self, p): 
+        return ('var', p.NAME) 
+  
+    @_('NUMBER') 
+    def expr(self, p): 
+        return ('num', p.NUMBER)
+    
+    
+class BasicExecute: 
+    def __init__(self, tree, env): 
+        self.env = env 
+        result = self.walkTree(tree) 
+        if result is not None and isinstance(result, int): 
+            print(result) 
+        if result is not None and isinstance(result, float): 
+            print(result) 
+        if isinstance(result, str) and result[0] == '"': 
+            print(result) 
+  
 
-    @_('FOR ex')
-    def for_loop(self, p):
-        pass
+    def walkTree(self, node): 
+        if isinstance(node, int): 
+            return node 
+        if isinstance(node, str): 
+            return node 
+        if isinstance(node, float): 
+            return node
+  
+        if node is None: 
+            return None
+  
+        if node[0] == 'program': 
+            if node[1] == None: 
+                self.walkTree(node[2]) 
+            else: 
+                self.walkTree(node[1]) 
+                self.walkTree(node[2]) 
+  
+
+        if node[0] == 'num': 
+            return node[1] 
+  
+        if node[0] == 'str': 
+            return node[1] 
+        
+        if node[0] == 'float':
+            return node[1]
+  
+        if node[0] == 'add': 
+            return self.walkTree(node[1]) + self.walkTree(node[2]) 
+        elif node[0] == 'sub': 
+            return self.walkTree(node[1]) - self.walkTree(node[2]) 
+        elif node[0] == 'mul': 
+            return self.walkTree(node[1]) * self.walkTree(node[2]) 
+        elif node[0] == 'div': 
+            if self.walkTree(node[1]) / self.walkTree(node[2]):
+                return self.walkTree(node[1]) / self.walkTree(node[2])
+  
+        if node[0] == 'var_assign': 
+            self.env[node[1]] = self.walkTree(node[2]) 
+            return node[1] 
+  
+        if node[0] == 'var': 
+            try: 
+                return self.env[node[1]] 
+            except LookupError: 
+                print("Undefined variable '"+node[1]+"' found!") 
+                return 0
+            
+        if node[0] == 'lt':  
+            left = self.walkTree(node[1])  
+            right = self.walkTree(node[2])  
+            result = left < right  
+            return result  
+		
+        if node[0] == 'gt':  
+            left = self.walkTree(node[1])  
+            right = self.walkTree(node[2])  
+            result = left > right  
+            return result  
+        
+        if node[0] == 'le':  
+            left = self.walkTree(node[1])  
+            right = self.walkTree(node[2])  
+            result = left <= right  
+            return result  
+		
+        if node[0] == 'ge':  
+            left = self.walkTree(node[1])  
+            right = self.walkTree(node[2])  
+            result = left >= right
+            return result  
+	
+        if node[0] == 'eq':    
+            left = self.walkTree(node[1])  
+            right = self.walkTree(node[2])  
+            result = left == right  
+            return result  
+        
+        if node[0] == 'while_loop':
+            var = node[1]
+            self.env[var] = self.walkTree(node[2])
+            
+            while self.walkTree(node[3]):
+                self.walkTree(node[2])
+                self.env[var] = self.walkTree(node[4])
 
 
-
-if __name__ == '__main__':
-    lexer = CalcLexer()
-    parser = CalcParser()
-
-    while True:
-        try:
-            text = input('calc > ')
-            result = parser.parse(lexer.tokenize(text))
-            print(result)
-        except EOFError:
+if __name__ == '__main__': 
+    lexer = BasicLexer() 
+    parser = BasicParser() 
+    print('Abby Rigsby') 
+    env = {} 
+      
+    while True:        
+        try: 
+            text = input(' > ') 
+        except EOFError: 
             break
+          
+        if text: 
+            tree = parser.parse(lexer.tokenize(text)) 
+            BasicExecute(tree, env)
