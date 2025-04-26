@@ -1,11 +1,12 @@
 from sly import Lexer
 from sly import Parser
-import sys
+import requests
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
     tokens = { NAME, STRING, NUMBER, WHILE, IF, ELSE, PRINT, FOR,
-               PLUS, MINUS, TIMES, DIVIDE, ASSIGN,
+               PLUS, MINUS, TIMES, DIVIDE, SQR, 
+               ASSIGN, SQGL,
                EQ, LT, LE, GT, GE, NE }
 
 
@@ -19,6 +20,8 @@ class BasicLexer(Lexer):
     MINUS   = r'-'
     TIMES   = r'\*'
     DIVIDE  = r'/'
+    SQR     = r'\^'
+    SQGL    = r'~'
     EQ      = r'=='
     LE      = r'<='
     GE      = r'>='
@@ -39,6 +42,7 @@ class BasicLexer(Lexer):
     NAME['while'] = WHILE
     NAME['for'] = FOR
     NAME['print'] = PRINT
+    STRING = r'"[^"]*"' 
 
     ignore_comment = r'\#.*'
 
@@ -74,10 +78,15 @@ class BasicParser(Parser):
     def statement(self, p):
         return p.while_loop
     
-    # TODO: get while loop working
     @_('WHILE expr "," statement')
     def while_loop(self, p):
         return ('while', p.expr, p.statement) 
+    
+    # TODO: for loop working
+    # TODO: functions working
+    # TODO: if else working
+    # TODO: print working
+    # TODO: list working
   
     @_('expr') 
     def statement(self, p): 
@@ -86,6 +95,18 @@ class BasicParser(Parser):
     @_('') 
     def statement(self, p): 
         return None
+    
+    @_('PRINT expr')
+    def print_statement(self, p):
+        return ('print', p.expr)
+    
+    @_('print_statement')  
+    def statement(self, p):  
+        return p[0]
+    
+    @_('STRING')
+    def expr(self, p):
+        return ('str', p.STRING[1:-1])
     
     @_('expr PLUS expr') 
     def expr(self, p): 
@@ -102,6 +123,10 @@ class BasicParser(Parser):
     @_('expr DIVIDE expr') 
     def expr(self, p): 
         return ('div', p.expr0, p.expr1) 
+    
+    @_('expr SQR expr')
+    def expr(self, p):
+        return ('sqr', p.expr0, p.expr1)
   
     @_('"-" expr %prec UMINUS') 
     def expr(self, p): 
@@ -119,11 +144,6 @@ class BasicParser(Parser):
     def var_assign(self, p): 
         return ('var_assign', p.NAME, p.STRING) 
     
-    # TODO: get for loop working
-    # TODO: functions working
-
-    #@_('FOR expr')
-    
     @_('expr comparison_op expr')
     def expr(self, p):
         return ('cmp', p.comparison_op, p.expr0, p.expr1)
@@ -140,7 +160,9 @@ class BasicParser(Parser):
     @_('NUMBER') 
     def expr(self, p): 
         return ('num', p.NUMBER)
-    
+
+
+# create dataclass for paths
     
 class BasicExecute: 
     def __init__(self, tree, env): 
@@ -193,6 +215,8 @@ class BasicExecute:
         elif node[0] == 'div': 
             if self.walkTree(node[1]) / self.walkTree(node[2]):
                 return self.walkTree(node[1]) / self.walkTree(node[2])
+        elif node[0] == 'sqr':
+            return self.walkTree(node[1]) ** self.walkTree(node[2])
   
         if node[0] == 'var_assign': 
             self.env[node[1]] = self.walkTree(node[2]) 
@@ -201,10 +225,21 @@ class BasicExecute:
         if node[0] == 'var': 
             try: 
                 return self.env[node[1]] 
-            except LookupError: 
+            except KeyError: 
                 print("Undefined variable '"+node[1]+"' found!") 
                 return 0
             
+        if node[0] == 'print':
+            value = self.walkTree(node[1])
+            
+            # Handle undefined values
+            if value is None:
+                print("Error: Undefined variable or value.")
+                return None
+
+            # Print the value correctly
+            print(value)
+        
         if node[0] == 'cmp':
             op = node[1]
             left = self.walkTree(node[2])
@@ -233,7 +268,7 @@ class BasicExecute:
 if __name__ == '__main__': 
     lexer = BasicLexer() 
     parser = BasicParser() 
-    print('Abby Rigsby') 
+    print('Abby Rigsby Programming Language') 
     env = {} 
       
     while True:        
