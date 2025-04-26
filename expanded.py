@@ -85,7 +85,7 @@ class BasicParser(Parser):
     
     @_('') 
     def statement(self, p): 
-        pass
+        return None
     
     @_('expr PLUS expr') 
     def expr(self, p): 
@@ -223,9 +223,11 @@ class BasicExecute:
                 return left >= right
         
         if node[0] == 'while':
-            _, cond, stmt = node
-            while self.walkTree(cond):
+            cond = node[1]
+            stmt = node[2]
+            while bool(self.walkTree(cond)):
                 self.walkTree(stmt)
+                cond = node[1]
 
 
 if __name__ == '__main__': 
