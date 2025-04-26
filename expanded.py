@@ -20,12 +20,12 @@ class BasicLexer(Lexer):
     TIMES   = r'\*'
     DIVIDE  = r'/'
     EQ      = r'=='
-    ASSIGN  = r'='
     LE      = r'<='
-    LT      = r'<'
     GE      = r'>='
-    GT      = r'>'
     NE      = r'!='
+    GT      = r'>'
+    LT      = r'<'
+    ASSIGN  = r'='
 
     @_(r'\d+')
     def NUMBER(self, t):
@@ -69,27 +69,24 @@ class BasicParser(Parser):
   
     def __init__(self): 
         self.env = { } 
-  
-    @_('') 
-    def statement(self, p): 
-        pass
-  
-    @_('var_assign') 
-    def statement(self, p): 
-        return p.var_assign 
-  
-    @_('NAME ASSIGN expr') 
-    def var_assign(self, p): 
-        return ('var_assign', p.NAME, p.expr) 
-  
-    @_('NAME ASSIGN STRING') 
-    def var_assign(self, p): 
-        return ('var_assign', p.NAME, p.STRING) 
+    
+    @_('while_loop')
+    def statement(self, p):
+        return p.while_loop
+    
+    # TODO: get while loop working
+    @_('WHILE expr "," statement')
+    def while_loop(self, p):
+        return ('while', p.expr, p.statement) 
   
     @_('expr') 
     def statement(self, p): 
-        return (p.expr) 
-  
+        return (p.expr)
+    
+    @_('') 
+    def statement(self, p): 
+        pass
+    
     @_('expr PLUS expr') 
     def expr(self, p): 
         return ('add', p.expr0, p.expr1) 
@@ -109,15 +106,33 @@ class BasicParser(Parser):
     @_('"-" expr %prec UMINUS') 
     def expr(self, p): 
         return -p.expr 
-    
-    @_('WHILE expr "," statement')
-    def while_loop(self, p):
-        return ('while', p.expr, p.statement)
-    
-    @_('while_loop')
-    def while_loop(self, p):
-        return p.while_loop
+
+    @_('var_assign') 
+    def statement(self, p): 
+        return p.var_assign 
   
+    @_('NAME ASSIGN expr') 
+    def var_assign(self, p): 
+        return ('var_assign', p.NAME, p.expr) 
+  
+    @_('NAME ASSIGN STRING') 
+    def var_assign(self, p): 
+        return ('var_assign', p.NAME, p.STRING) 
+    
+    # TODO: get for loop working
+    # TODO: functions working
+
+    #@_('FOR expr')
+    
+    @_('expr comparison_op expr')
+    def expr(self, p):
+        return ('cmp', p.comparison_op, p.expr0, p.expr1)
+    
+    # Define comparison operators as tokens
+    @_('LT', 'GT', 'EQ', 'NE', 'LE', 'GE')
+    def comparison_op(self, p):
+        return p[0]
+
     @_('NAME') 
     def expr(self, p): 
         return ('var', p.NAME) 
@@ -145,6 +160,8 @@ class BasicExecute:
         if isinstance(node, str): 
             return node 
         if isinstance(node, float): 
+            return node
+        if isinstance(node, bool):
             return node
   
         if node is None: 
@@ -188,43 +205,27 @@ class BasicExecute:
                 print("Undefined variable '"+node[1]+"' found!") 
                 return 0
             
-        if node[0] == 'lt':  
-            left = self.walkTree(node[1])  
-            right = self.walkTree(node[2])  
-            result = left < right  
-            return result  
-		
-        if node[0] == 'gt':  
-            left = self.walkTree(node[1])  
-            right = self.walkTree(node[2])  
-            result = left > right  
-            return result  
+        if node[0] == 'cmp':
+            op = node[1]
+            left = self.walkTree(node[2])
+            right = self.walkTree(node[3])
+            if op == '<': 
+                return left < right
+            if op == '>': 
+                return left > right
+            if op == '==': 
+                return left == right
+            if op == '!=': 
+                return left != right
+            if op == '<=': 
+                return left <= right
+            if op == '>=': 
+                return left >= right
         
-        if node[0] == 'le':  
-            left = self.walkTree(node[1])  
-            right = self.walkTree(node[2])  
-            result = left <= right  
-            return result  
-		
-        if node[0] == 'ge':  
-            left = self.walkTree(node[1])  
-            right = self.walkTree(node[2])  
-            result = left >= right
-            return result  
-	
-        if node[0] == 'eq':    
-            left = self.walkTree(node[1])  
-            right = self.walkTree(node[2])  
-            result = left == right  
-            return result  
-        
-        if node[0] == 'while_loop':
-            var = node[1]
-            self.env[var] = self.walkTree(node[2])
-            
-            while self.walkTree(node[3]):
-                self.walkTree(node[2])
-                self.env[var] = self.walkTree(node[4])
+        if node[0] == 'while':
+            _, cond, stmt = node
+            while self.walkTree(cond):
+                self.walkTree(stmt)
 
 
 if __name__ == '__main__': 
