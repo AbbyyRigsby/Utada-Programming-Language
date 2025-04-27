@@ -10,7 +10,7 @@ class BasicLexer(Lexer):
                EQ, LT, LE, GT, GE, NE }
 
 
-    literals = { '(', ')', '{', '}', ';', ","}
+    literals = { '(', ')', '{', '}', ';', ",", "[", "]" }
 
     # String containing ignored characters
     ignore = ' \t'
@@ -135,6 +135,10 @@ class BasicParser(Parser):
     @_('var_assign') 
     def statement(self, p): 
         return p.var_assign 
+    
+    @_('NAME ASSIGN "[" expr "]"')
+    def statement(self, p):
+        return('list_assign', p.NAME, p.expr)
   
     @_('NAME ASSIGN expr') 
     def var_assign(self, p): 
@@ -152,6 +156,18 @@ class BasicParser(Parser):
     @_('LT', 'GT', 'EQ', 'NE', 'LE', 'GE')
     def comparison_op(self, p):
         return p[0]
+
+    @_('"[" list_items "]"')
+    def expr(self, p):
+        return p.list_items  # Return the list
+    
+    @_('list_items "," expr')
+    def list_items(self, p):
+        return p.list_items + [p.expr]
+
+    @_('expr')  # Base case: A single-element list
+    def list_items(self, p):
+        return [p.expr]
 
     @_('NAME') 
     def expr(self, p): 
@@ -185,6 +201,8 @@ class BasicExecute:
             return node
         if isinstance(node, bool):
             return node
+        if isinstance(node, list):
+            return node 
   
         if node is None: 
             return None
@@ -227,8 +245,14 @@ class BasicExecute:
                 return self.env[node[1]] 
             except KeyError: 
                 print("Undefined variable '"+node[1]+"' found!") 
-                return 0
             
+
+        if node[0] == 'list_assign':
+            list_name = node[1]
+            list_values = [self.walkTree(value) for value in node[2]]  # Evaluates each value
+            self.env[list_name] = list_values  # Stores the list in the environment
+
+
         if node[0] == 'print':
             value = self.walkTree(node[1])
             
@@ -236,10 +260,16 @@ class BasicExecute:
             if value is None:
                 print("Error: Undefined variable or value.")
                 return None
+            
+            if isinstance(value, list):
+                for item in value:
+                    print(item[1], end=' ')
+                print()
 
-            # Print the value correctly
-            print(value)
-        
+            else:
+                # Print the value correctly
+                print(value)
+            
         if node[0] == 'cmp':
             op = node[1]
             left = self.walkTree(node[2])
