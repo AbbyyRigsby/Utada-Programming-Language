@@ -4,7 +4,8 @@ import requests
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, STRING, NUMBER, WHILE, IF, ELSE, PRINT, FOR,
+    tokens = { NAME, STRING, NUMBER, 
+              WHILE, IF, ELSE, PRINT, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
                ASSIGN, SQGL,
                EQ, LT, LE, GT, GE, NE }
@@ -41,6 +42,7 @@ class BasicLexer(Lexer):
     NAME['else'] = ELSE
     NAME['while'] = WHILE
     NAME['for'] = FOR
+    NAME['in'] = IN
     NAME['print'] = PRINT
     STRING = r'"[^"]*"' 
 
@@ -82,11 +84,17 @@ class BasicParser(Parser):
     def while_loop(self, p):
         return ('while', p.expr, p.statement) 
     
+    @_('FOR expr IN expr "," statement')
+    def for_loop(self, p):
+        return ('for', p.expr0, p.expr1, p.statement)
+    
+    @_('for_loop')
+    def statement(self, p):
+        return p.for_loop
+
     # TODO: for loop working
     # TODO: functions working
     # TODO: if else working
-    # TODO: print working
-    # TODO: list working
   
     @_('expr') 
     def statement(self, p): 
@@ -143,10 +151,6 @@ class BasicParser(Parser):
     @_('NAME ASSIGN expr') 
     def var_assign(self, p): 
         return ('var_assign', p.NAME, p.expr) 
-  
-    @_('NAME ASSIGN STRING') 
-    def var_assign(self, p): 
-        return ('var_assign', p.NAME, p.STRING) 
     
     @_('expr comparison_op expr')
     def expr(self, p):
@@ -190,7 +194,6 @@ class BasicExecute:
             print(result) 
         if isinstance(result, str) and result[0] == '"': 
             print(result) 
-  
 
     def walkTree(self, node): 
         if isinstance(node, int): 
@@ -224,6 +227,7 @@ class BasicExecute:
         if node[0] == 'float':
             return node[1]
   
+
         if node[0] == 'add': 
             return self.walkTree(node[1]) + self.walkTree(node[2]) 
         elif node[0] == 'sub': 
@@ -294,6 +298,25 @@ class BasicExecute:
                 self.walkTree(stmt)
                 cond = node[1]
 
+        if node[0] == 'for':
+            loop_var = node[1][1]  # Extract variable name correctly
+            iterable = self.walkTree(node[2])  # Evaluate iterable
+            stmt = node[3]  # Statement inside the loop
+
+            if not isinstance(iterable, list):
+                raise Exception(f"Error: {iterable} is not iterable.")
+
+            index = 0
+            length = len(iterable)
+            while index < length:
+                value = iterable[index]  # Get current item
+
+                if isinstance(value, tuple):  # Extract actual value if stored as ('num', 1)
+                    value = value[1]
+
+                self.env[loop_var] = value  # Store extracted value dynamically
+                self.walkTree(stmt)  # Execute statement inside loop
+                index += 1
 
 if __name__ == '__main__': 
     lexer = BasicLexer() 
