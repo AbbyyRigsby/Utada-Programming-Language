@@ -4,7 +4,7 @@ import requests
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, STRING, NUMBER, 
+    tokens = { NAME, STRING, NUMBER, BOOL, 
               WHILE, IF, ELSE, PRINT, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
                ASSIGN, SQGL,
@@ -45,6 +45,14 @@ class BasicLexer(Lexer):
     NAME['in'] = IN
     NAME['print'] = PRINT
     STRING = r'"[^"]*"' 
+    
+    @_(BOOL)
+    def BOOL(self, t):
+        if t.value == 'true':
+            t.value = True
+        else:
+            t.value = False
+        return t
 
     ignore_comment = r'\#.*'
 
@@ -92,9 +100,11 @@ class BasicParser(Parser):
     def statement(self, p):
         return p.for_loop
 
-    # TODO: for loop working
     # TODO: functions working
-    # TODO: if else working
+
+    @_('IF expr "," statement ";" ELSE statement')
+    def statement(self, p):
+        return ('if', p.expr, p.statement0, p.statement1)
   
     @_('expr') 
     def statement(self, p): 
@@ -173,6 +183,10 @@ class BasicParser(Parser):
     def list_items(self, p):
         return [p.expr]
 
+    @_('BOOL')
+    def expr(self, p):
+        return ('bool', p.BOOL == 'true')
+
     @_('NAME') 
     def expr(self, p): 
         return ('var', p.NAME) 
@@ -196,13 +210,13 @@ class BasicExecute:
             print(result) 
 
     def walkTree(self, node): 
+        if isinstance(node, bool):
+            return node
         if isinstance(node, int): 
             return node 
         if isinstance(node, str): 
             return node 
         if isinstance(node, float): 
-            return node
-        if isinstance(node, bool):
             return node
         if isinstance(node, list):
             return node 
@@ -217,6 +231,8 @@ class BasicExecute:
                 self.walkTree(node[1]) 
                 self.walkTree(node[2]) 
   
+        if node[0] == 'bool':
+            return node[1]
 
         if node[0] == 'num': 
             return node[1] 
@@ -244,6 +260,7 @@ class BasicExecute:
             self.env[node[1]] = self.walkTree(node[2]) 
             return node[1] 
   
+
         if node[0] == 'var': 
             try: 
                 return self.env[node[1]] 
@@ -274,6 +291,7 @@ class BasicExecute:
                 # Print the value correctly
                 print(value)
             
+
         if node[0] == 'cmp':
             op = node[1]
             left = self.walkTree(node[2])
@@ -291,12 +309,25 @@ class BasicExecute:
             if op == '>=': 
                 return left >= right
         
+
         if node[0] == 'while':
             cond = node[1]
             stmt = node[2]
             while bool(self.walkTree(cond)):
                 self.walkTree(stmt)
                 cond = node[1]
+
+
+        if node[0] == 'if':
+            cond = node[1]
+            stmt = node[2]
+            else_stmt = node[3]
+
+            if bool(self.walkTree(cond)):
+                self.walkTree(stmt)
+            else:
+                self.walkTree(else_stmt)
+
 
         if node[0] == 'for':
             loop_var = node[1][1]  # Extract variable name correctly
@@ -317,6 +348,7 @@ class BasicExecute:
                 self.env[loop_var] = value  # Store extracted value dynamically
                 self.walkTree(stmt)  # Execute statement inside loop
                 index += 1
+
 
 if __name__ == '__main__': 
     lexer = BasicLexer() 
