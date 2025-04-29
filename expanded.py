@@ -1,17 +1,31 @@
 from sly import Lexer
 from sly import Parser
 import requests
+from dataclasses import dataclass
+
+
+# create dataclass for paths
+@dataclass
+class Path:
+    name: str
+
+    def __repr__(self):
+        for char in self.name:
+            if char == '/':
+                self.name = self.name.replace(char, '\\')
+        return self.name
+    
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, STRING, NUMBER, BOOL, 
-              WHILE, IF, ELSE, PRINT, FOR, IN,
+    tokens = { NAME, STRING, NUMBER, 
+               WHILE, IF, ELSE, PRINT, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
-               ASSIGN, SQGL,
+               ASSIGN, SQGL, DEF,
                EQ, LT, LE, GT, GE, NE }
 
 
-    literals = { '(', ')', '{', '}', ';', ",", "[", "]" }
+    literals = { '(', ')', '{', '}', ';', ":", ",", "[", "]" }
 
     # String containing ignored characters
     ignore = ' \t'
@@ -44,15 +58,8 @@ class BasicLexer(Lexer):
     NAME['for'] = FOR
     NAME['in'] = IN
     NAME['print'] = PRINT
+    NAME['def'] = DEF
     STRING = r'"[^"]*"' 
-    
-    @_(BOOL)
-    def BOOL(self, t):
-        if t.value == 'true':
-            t.value = True
-        else:
-            t.value = False
-        return t
 
     ignore_comment = r'\#.*'
 
@@ -126,6 +133,18 @@ class BasicParser(Parser):
     def expr(self, p):
         return ('str', p.STRING[1:-1])
     
+    @_('STRING PLUS concat_list')
+    def expr(self, p):
+        return ('concat', [p.STRING[1:-1]] + p.concat_list)
+
+    @_('STRING PLUS STRING')
+    def concat_list(self, p):
+        return [p.STRING0[1:-1], p.STRING1[1:-1]]
+
+    @_('STRING PLUS concat_list')
+    def concat_list(self, p):
+        return [p.STRING[1:-1]] + p.concat_list
+    
     @_('expr PLUS expr') 
     def expr(self, p): 
         return ('add', p.expr0, p.expr1) 
@@ -183,10 +202,6 @@ class BasicParser(Parser):
     def list_items(self, p):
         return [p.expr]
 
-    @_('BOOL')
-    def expr(self, p):
-        return ('bool', p.BOOL == 'true')
-
     @_('NAME') 
     def expr(self, p): 
         return ('var', p.NAME) 
@@ -195,12 +210,11 @@ class BasicParser(Parser):
     def expr(self, p): 
         return ('num', p.NUMBER)
 
-
-# create dataclass for paths
     
 class BasicExecute: 
     def __init__(self, tree, env): 
         self.env = env 
+        self.functions = {}
         result = self.walkTree(tree) 
         if result is not None and isinstance(result, int): 
             print(result) 
@@ -210,8 +224,6 @@ class BasicExecute:
             print(result) 
 
     def walkTree(self, node): 
-        if isinstance(node, bool):
-            return node
         if isinstance(node, int): 
             return node 
         if isinstance(node, str): 
@@ -231,9 +243,6 @@ class BasicExecute:
                 self.walkTree(node[1]) 
                 self.walkTree(node[2]) 
   
-        if node[0] == 'bool':
-            return node[1]
-
         if node[0] == 'num': 
             return node[1] 
   
@@ -272,6 +281,11 @@ class BasicExecute:
             list_name = node[1]
             list_values = [self.walkTree(value) for value in node[2]]  # Evaluates each value
             self.env[list_name] = list_values  # Stores the list in the environment
+
+
+        if node[0] == 'concat':
+            print(''.join(node[1]))
+            return ''.join(node[1])
 
 
         if node[0] == 'print':
@@ -348,6 +362,45 @@ class BasicExecute:
                 self.env[loop_var] = value  # Store extracted value dynamically
                 self.walkTree(stmt)  # Execute statement inside loop
                 index += 1
+
+        """ if node[0] == 'function_def':
+            self.functions[node[1]] = (node[2], node[3])  # Store (params, statement)
+            print(f"Function '{node[1]}' defined with parameters {node[2]}")
+            return f"Function '{node[1]}' defined"
+        
+        if node[0] == 'function_call':
+            func_name = node[1]
+            args = [self.walkTree(arg) for arg in node[2]]
+
+            if func_name not in self.functions:
+                print(f"DEBUG: Function '{func_name}' NOT FOUND")
+                raise Exception(f"Error: Undefined function '{func_name}'")
+            else:
+                print(f"DEBUG: Function '{func_name}' FOUND with arguments {args}")
+
+            params, stmt = self.functions[func_name]
+
+            if len(params) != len(args):
+                print(f"DEBUG: Argument mismatch! Expected {len(params)}, got {len(args)}")
+                raise Exception(f"Error: Function '{func_name}' expected {len(params)} arguments, got {len(args)}")
+
+            local_env = {}
+
+            # Ensure parameters are properly assigned
+            for i in range(len(params)):
+                param_name = params[i][1] if isinstance(params[i], tuple) and params[i][0] == 'var' else params[i]
+                local_env[param_name] = args[i]
+                print(f"DEBUG: Assigned parameter '{param_name}' = {args[i]}")
+
+            saved_env = self.env
+            self.env = local_env  # Switch to function scope
+
+            print(f"DEBUG: Executing function '{func_name}' body")
+            result = self.walkTree(stmt)
+
+            self.env = saved_env  # Restore global environment
+
+            return result """
 
 
 if __name__ == '__main__': 
