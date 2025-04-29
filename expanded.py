@@ -22,10 +22,11 @@ class BasicLexer(Lexer):
                WHILE, IF, ELSE, PRINT, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
                ASSIGN, SQGL, DEF,
+               APPEND, REMOVE,
                EQ, LT, LE, GT, GE, NE }
 
 
-    literals = { '(', ')', '{', '}', ';', ":", ",", "[", "]" }
+    literals = { '(', ')', '{', '}', ';', ":", ",", ".", "[", "]" }
 
     # String containing ignored characters
     ignore = ' \t'
@@ -59,6 +60,8 @@ class BasicLexer(Lexer):
     NAME['in'] = IN
     NAME['print'] = PRINT
     NAME['def'] = DEF
+    NAME['app'] = APPEND
+    NAME['rem'] = REMOVE
     STRING = r'"[^"]*"' 
 
     ignore_comment = r'\#.*'
@@ -197,6 +200,14 @@ class BasicParser(Parser):
     @_('list_items "," expr')
     def list_items(self, p):
         return p.list_items + [p.expr]
+    
+    @_('NAME "." APPEND "(" expr ")"')
+    def statement(self, p):
+        return ('list_append', p.NAME, p.expr)
+
+    @_('NAME "." REMOVE "(" expr ")"')
+    def statement(self, p):
+        return ('list_remove', p.NAME, p.expr)
 
     @_('expr')  # Base case: A single-element list
     def list_items(self, p):
@@ -265,6 +276,7 @@ class BasicExecute:
         elif node[0] == 'sqr':
             return self.walkTree(node[1]) ** self.walkTree(node[2])
   
+
         if node[0] == 'var_assign': 
             self.env[node[1]] = self.walkTree(node[2]) 
             return node[1] 
@@ -281,6 +293,35 @@ class BasicExecute:
             list_name = node[1]
             list_values = [self.walkTree(value) for value in node[2]]  # Evaluates each value
             self.env[list_name] = list_values  # Stores the list in the environment
+
+        if node[0] == 'list_append':
+            list_name = node[1]
+            value = self.walkTree(node[2])
+
+            if list_name in self.env and isinstance(self.env[list_name], list):
+                self.env[list_name].append(value)
+                # print(f"DEBUG: Appended {value} to {list_name} → {self.env[list_name]}")
+            else:
+                raise Exception(f"Error: '{list_name}' is not a valid list.")
+
+
+        if node[0] == 'list_remove':
+            list_name = node[1]
+            value = self.walkTree(node[2])  # Get raw value to remove
+
+            # Ensure the list exists and is stored correctly
+            if list_name in self.env and isinstance(self.env[list_name], list):
+
+                # Extract only the values from the stored tuples
+                extracted_values = [item[1] if isinstance(item, tuple) and len(item) == 2 else item for item in self.env[list_name]]
+
+                if value in extracted_values:
+                    # Find and remove the correct tuple containing the value
+                    self.env[list_name] = [item for item in self.env[list_name] if item[1] != value]
+                else:
+                    raise Exception(f"Error: Value {value} not found in list '{list_name}'.")
+            else:
+                raise Exception(f"Error: '{list_name}' is not a valid list.")
 
 
         if node[0] == 'concat':
