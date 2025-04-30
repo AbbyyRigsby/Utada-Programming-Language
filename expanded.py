@@ -3,22 +3,17 @@ from sly import Parser
 import requests
 from dataclasses import dataclass
 
-
-# create dataclass for paths
 @dataclass
 class Path:
     name: str
 
     def __repr__(self):
-        for char in self.name:
-            if char == '/':
-                self.name = self.name.replace(char, '\\')
-        return self.name
-    
+        return self.name.replace('\\', '\\')    
+
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, STRING, NUMBER, 
+    tokens = { NAME, STRING, NUMBER, PATH,
                WHILE, IF, ELSE, PRINT, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
                ASSIGN, SQGL, DEF,
@@ -26,7 +21,7 @@ class BasicLexer(Lexer):
                EQ, LT, LE, GT, GE, NE }
 
 
-    literals = { '(', ')', '{', '}', ';', ":", ",", ".", "[", "]" }
+    literals = { '(', ')', '{', '}', ';', ":", ",", ".", "[", "]" , "\\"}
 
     # String containing ignored characters
     ignore = ' \t'
@@ -53,6 +48,9 @@ class BasicLexer(Lexer):
 
     # Identifiers and keywords
     NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
+    STRING = r'"[^"]*"' 
+    PATH = r'~[a-zA-Z]:\\(?:[a-zA-Z0-9_\\]+\\?)*'
+
     NAME['if'] = IF
     NAME['else'] = ELSE
     NAME['while'] = WHILE
@@ -62,7 +60,7 @@ class BasicLexer(Lexer):
     NAME['def'] = DEF
     NAME['app'] = APPEND
     NAME['rem'] = REMOVE
-    STRING = r'"[^"]*"' 
+    
 
     ignore_comment = r'\#.*'
 
@@ -213,6 +211,14 @@ class BasicParser(Parser):
     def list_items(self, p):
         return [p.expr]
 
+    @_('SQGL PATH')
+    def expr(self, p):
+        return ('path', p.PATH)
+    
+    @_('PATH')
+    def expr(self, p):
+        return ('path', p.PATH)
+
     @_('NAME') 
     def expr(self, p): 
         return ('var', p.NAME) 
@@ -241,6 +247,8 @@ class BasicExecute:
             return node 
         if isinstance(node, float): 
             return node
+        if isinstance(node, Path):
+            return node.name.replace('/', '\\')
         if isinstance(node, list):
             return node 
   
@@ -263,6 +271,8 @@ class BasicExecute:
         if node[0] == 'float':
             return node[1]
   
+        if node[0] == 'path':
+            return node[1]
 
         if node[0] == 'add': 
             return self.walkTree(node[1]) + self.walkTree(node[2]) 
@@ -316,7 +326,7 @@ class BasicExecute:
                 extracted_values = [item[1] if isinstance(item, tuple) and len(item) == 2 else item for item in self.env[list_name]]
 
                 if value in extracted_values:
-                    # Find and remove the correct tuple containing the value
+                    # values are stored as tupe so need to find the actual value
                     self.env[list_name] = [item for item in self.env[list_name] if item[1] != value]
                 else:
                     raise Exception(f"Error: Value {value} not found in list '{list_name}'.")
@@ -447,7 +457,40 @@ class BasicExecute:
 if __name__ == '__main__': 
     lexer = BasicLexer() 
     parser = BasicParser() 
-    print('Abby Rigsby Programming Language') 
+    print('Welcome to Utada Programming Language!')
+    print('NOW PLAYING: "Simple and Clean" by Utada Hikaru')
+    print('               ↻      ◁     ||     ▷       ↺')
+    print('              ────────•────────────────────────')
+
+    print("""                                                  
+                                                  
+          .;+xxxxx:           .;xXXX$X+.          
+       .x&&&&&&&&&&&x: .xX: .x&&&&&&&&&&&&;       
+     .x&&&&+. ... ;&$&&&&&&&&&&; .:. .x&&&&&:     
+    .$&&; x&&&&&&&&&+xx&&&&$+;&&&&&&&&&$.+&&&;    
+    x&$..&&&&x..; ;$X&&:..+$&$&+ +..x&&&&x X&&    
+    &&..&&x   .&&$x  $&:$&:&&. x&&&:   x&&:.&&.   
+    && +&$    ;&.$&&&&xx&&X;&&&&&.&+    &&x &&.   
+    && x&&.   .&&; :..&&&&&&..: ;&&:   .&&+ &&.   
+    &&& &&&    .&&&&&&&x. x&&&&&&&;    &&& X&&    
+    :&&$.&&&;     .::.       :;.     :&&&.X&&+    
+     +&&& &&&&.                     $&&& &&&+     
+      :&&&&.&&&&.                .&&&&.$&&&:      
+        x&&&&:&&&&.            .&&&&+X&&&X        
+          X&&&& &&&&.        .&&&&.&&&&x          
+            x&&&& &&&&      $&&& &&&&x            
+              :&&&& &&&:  :&&&.&&&&:              
+                :&&&&&&&;;&&&$&&&:                
+                  ;&&&+&&&&x&&&;                  
+                    &&&+&&X&&&                    
+                     &&&.:&&&                     
+                      &&&$&&.                     
+                      +&&&&x                      
+                      .&&&&.                      
+                       x&&x                       
+                        ..                        
+                                                  
+                                                  """) 
     env = {} 
       
     while True:        
