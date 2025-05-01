@@ -3,6 +3,7 @@ from expanded import *
 if __name__ == '__main__': 
     lexer = BasicLexer() 
     parser = BasicParser() 
+    print('                                               ')
     print('    Welcome to Utada Programming Language!')
     print('NOW PLAYING: "Simple and Clean" by Utada Hikaru')
     print('↻             ◁     ||     ▷                ↺')

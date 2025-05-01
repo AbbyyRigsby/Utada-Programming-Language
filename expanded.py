@@ -1,19 +1,12 @@
 from sly import Lexer
 from sly import Parser
-import requests
-from dataclasses import dataclass
-
-@dataclass
-class Path:
-    name: str
-
-    def __repr__(self):
-        return self.name.replace('\\', '\\')    
+import os
+import webbrowser
 
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, STRING, NUMBER, PATH,
+    tokens = { NAME, STRING, NUMBER, OPEN, LINK,
                WHILE, IF, ELSE, PRINT, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
                ASSIGN, SQGL, DEF,
@@ -27,12 +20,12 @@ class BasicLexer(Lexer):
     ignore = ' \t'
 
     # Regular expression rules for tokens
+    SQGL    = r'~'
     PLUS    = r'\+'
     MINUS   = r'-'
     TIMES   = r'\*'
     DIVIDE  = r'/'
     SQR     = r'\^'
-    SQGL    = r'~'
     EQ      = r'=='
     LE      = r'<='
     GE      = r'>='
@@ -41,6 +34,7 @@ class BasicLexer(Lexer):
     LT      = r'<'
     ASSIGN  = r'='
 
+
     @_(r'\d+')
     def NUMBER(self, t):
         t.value = int(t.value)
@@ -48,8 +42,7 @@ class BasicLexer(Lexer):
 
     # Identifiers and keywords
     NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
-    STRING = r'"[^"]*"' 
-    PATH = r'~[a-zA-Z]:\\(?:[a-zA-Z0-9_\\]+\\?)*'
+    STRING = r'"[^"]*"'
 
     NAME['if'] = IF
     NAME['else'] = ELSE
@@ -60,6 +53,7 @@ class BasicLexer(Lexer):
     NAME['def'] = DEF
     NAME['app'] = APPEND
     NAME['rem'] = REMOVE
+    NAME['open'] = OPEN
     
 
     ignore_comment = r'\#.*'
@@ -86,8 +80,8 @@ class BasicParser(Parser):
     precedence = ( 
         ('left', PLUS, MINUS), 
         ('left', TIMES, DIVIDE), 
-        ('right', 'UMINUS'), 
-    ) 
+        ('right', 'UMINUS')
+    )
   
     def __init__(self): 
         self.env = { } 
@@ -146,6 +140,14 @@ class BasicParser(Parser):
     def concat_list(self, p):
         return [p.STRING[1:-1]] + p.concat_list
     
+    @_('OPEN STRING')
+    def open_statement(self, p):
+        return ('open', p.STRING[1:-1])
+    
+    @_('open_statement')
+    def statement(self, p):
+        return p.open_statement
+
     @_('expr PLUS expr') 
     def expr(self, p): 
         return ('add', p.expr0, p.expr1) 
@@ -211,14 +213,6 @@ class BasicParser(Parser):
     def list_items(self, p):
         return [p.expr]
 
-    @_('SQGL PATH')
-    def expr(self, p):
-        return ('path', p.PATH)
-    
-    @_('PATH')
-    def expr(self, p):
-        return ('path', p.PATH)
-
     @_('NAME') 
     def expr(self, p): 
         return ('var', p.NAME) 
@@ -233,6 +227,7 @@ class BasicExecute:
         self.env = env 
         self.functions = {}
         result = self.walkTree(tree) 
+
         if result is not None and isinstance(result, int): 
             print(result) 
         if result is not None and isinstance(result, float): 
@@ -247,10 +242,6 @@ class BasicExecute:
             return node 
         if isinstance(node, float): 
             return node
-        if isinstance(node, Path):
-            return node.name.replace('/', '\\')
-        if isinstance(node, list):
-            return node 
   
         if node is None: 
             return None
@@ -271,8 +262,13 @@ class BasicExecute:
         if node[0] == 'float':
             return node[1]
   
+        if node[0] == 'link':
+            link_value = node[1]
+            print(f"DEBUG: Recognized link → {link_value}")
+            return link_value
+        
         if node[0] == 'path':
-            return node[1]
+            return os.path.abspath(node[1])  
 
         if node[0] == 'add': 
             return self.walkTree(node[1]) + self.walkTree(node[2]) 
@@ -393,6 +389,15 @@ class BasicExecute:
             else:
                 self.walkTree(else_stmt)
 
+        if node[0] == 'open':  # Opens link in a browser
+            link = node[1]
+            if link.startswith('http://') or link.startswith('https://'):
+                try:
+                    webbrowser.open(link)  # Open link in the default browser
+                    print(f"Successfully opened {link}!")
+                except Exception as e:
+                    print(f"Uh oh! Failed opening link! {link} ({e})")
+
 
         if node[0] == 'for':
             loop_var = node[1][1]  # Extract variable name correctly
@@ -452,53 +457,3 @@ class BasicExecute:
             self.env = saved_env  # Restore global environment
 
             return result """
-
-
-if __name__ == '__main__': 
-    lexer = BasicLexer() 
-    parser = BasicParser() 
-    print('Welcome to Utada Programming Language!')
-    print('NOW PLAYING: "Simple and Clean" by Utada Hikaru')
-    print('               ↻      ◁     ||     ▷       ↺')
-    print('              ────────•────────────────────────')
-
-    print("""                                                  
-                                                  
-          .;+xxxxx:           .;xXXX$X+.          
-       .x&&&&&&&&&&&x: .xX: .x&&&&&&&&&&&&;       
-     .x&&&&+. ... ;&$&&&&&&&&&&; .:. .x&&&&&:     
-    .$&&; x&&&&&&&&&+xx&&&&$+;&&&&&&&&&$.+&&&;    
-    x&$..&&&&x..; ;$X&&:..+$&$&+ +..x&&&&x X&&    
-    &&..&&x   .&&$x  $&:$&:&&. x&&&:   x&&:.&&.   
-    && +&$    ;&.$&&&&xx&&X;&&&&&.&+    &&x &&.   
-    && x&&.   .&&; :..&&&&&&..: ;&&:   .&&+ &&.   
-    &&& &&&    .&&&&&&&x. x&&&&&&&;    &&& X&&    
-    :&&$.&&&;     .::.       :;.     :&&&.X&&+    
-     +&&& &&&&.                     $&&& &&&+     
-      :&&&&.&&&&.                .&&&&.$&&&:      
-        x&&&&:&&&&.            .&&&&+X&&&X        
-          X&&&& &&&&.        .&&&&.&&&&x          
-            x&&&& &&&&      $&&& &&&&x            
-              :&&&& &&&:  :&&&.&&&&:              
-                :&&&&&&&;;&&&$&&&:                
-                  ;&&&+&&&&x&&&;                  
-                    &&&+&&X&&&                    
-                     &&&.:&&&                     
-                      &&&$&&.                     
-                      +&&&&x                      
-                      .&&&&.                      
-                       x&&x                       
-                        ..                        
-                                                  
-                                                  """) 
-    env = {} 
-      
-    while True:        
-        try: 
-            text = input(' > ') 
-        except EOFError: 
-            break
-          
-        if text: 
-            tree = parser.parse(lexer.tokenize(text)) 
-            BasicExecute(tree, env)
