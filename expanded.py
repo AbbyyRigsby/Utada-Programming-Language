@@ -79,8 +79,7 @@ class BasicParser(Parser):
     precedence = ( 
         ('left', PLUS, MINUS), 
         ('left', TIMES, DIVIDE), 
-        ('right', 'UMINUS'),
-        ('right', ASSIGN),
+        ('right', 'UMINUS')
     )
   
     def __init__(self): 
@@ -178,9 +177,9 @@ class BasicParser(Parser):
     def statement(self, p): 
         return p.var_assign 
     
-    @_('NAME ASSIGN "[" expr "]"')
+    @_('NAME ASSIGN "[" list_items "]"')
     def statement(self, p):
-        return('list_assign', p.NAME, p.expr)
+        return('list_assign', p.NAME, p.list_items) 
   
     @_('NAME ASSIGN expr') 
     def var_assign(self, p): 
@@ -292,7 +291,7 @@ class BasicExecute:
 
         if node[0] == 'list_assign':
             list_name = node[1]
-            list_values = [self.walkTree(value) for value in node[2]]  # Evaluates each value
+            list_values = node[2]  # Evaluates each value
             self.env[list_name] = list_values  # Stores the list in the environment
 
 
@@ -303,7 +302,7 @@ class BasicExecute:
             if list_name in self.env and isinstance(self.env[list_name], list):
                 self.env[list_name].append(value)
             else:
-                raise Exception(f"{terminal_colors.FAIL}Error: '{list_name}' is not a valid list.")
+                raise Exception(f"{terminal_colors.FAIL}Error: '{list_name}' is not a valid list.{terminal_colors.HEADER}")
 
 
         if node[0] == 'list_remove':
@@ -320,9 +319,9 @@ class BasicExecute:
                     # values are stored as tupe so need to find the actual value
                     self.env[list_name] = [item for item in self.env[list_name] if item[1] != value]
                 else:
-                    raise Exception(f"{terminal_colors.FAIL}Error: Value {value} not found in list '{list_name}'.")
+                    raise Exception(f"{terminal_colors.FAIL}Error: Value {value} not found in list '{list_name}'.{terminal_colors.HEADER}")
             else:
-                raise Exception(f"{terminal_colors.FAIL}Error: '{list_name}' is not a valid list.")
+                raise Exception(f"{terminal_colors.FAIL}Error: '{list_name}' is not a valid list.{terminal_colors.HEADER}")
 
 
         if node[0] == 'concat':
@@ -335,7 +334,7 @@ class BasicExecute:
             
             # Handle undefined values
             if value is None:
-                print(f"{terminal_colors.FAIL}Error: Undefined variable or value.")
+                print(f"{terminal_colors.FAIL}Error: Undefined variable or value.{terminal_colors.HEADER}")
                 return None
             
             if isinstance(value, list):
@@ -399,16 +398,16 @@ class BasicExecute:
             if link.startswith('http://') or link.startswith('https://'):
                 try:
                     webbrowser.open(link)  # Open link in the default browser
-                    print(f"{terminal_colors.OKBLUE}Successfully opened {link}!")
+                    print(f"{terminal_colors.OKBLUE}Successfully opened {link}!{terminal_colors.HEADER}")
                 except Exception as e:
-                    print(f"{terminal_colors.FAIL}Uh oh! Failed opening link! {link} ({e})")
+                    print(f"{terminal_colors.FAIL}Uh oh! Failed opening link! {link} ({e}){terminal_colors.HEADER}")
             
             elif os.path.exists(link):  # Check if it's a valid file path
                 try:
                     os.startfile(link)  # Open the file using the system's default application
-                    print(f"{terminal_colors.OKBLUE}Successfully opened file! {link}")
+                    print(f"{terminal_colors.OKBLUE}Successfully opened file! {link}{terminal_colors.HEADER}")
                 except Exception as e:
-                    print(f"{terminal_colors.FAIL}Error opening file! {link} ({e})")
+                    print(f"{terminal_colors.FAIL}Error opening file! {link} ({e}){terminal_colors.HEADER}")
 
 
         if node[0] == 'for':
@@ -417,7 +416,7 @@ class BasicExecute:
             stmt = node[3]  # Statement inside the loop
 
             if not isinstance(iterable, list):
-                raise Exception(f"{terminal_colors.FAIL}Error: {iterable} is not iterable.")
+                raise Exception(f"{terminal_colors.FAIL}Error: {iterable} is not iterable.{terminal_colors.HEADER}")
 
             index = 0
             length = len(iterable)
