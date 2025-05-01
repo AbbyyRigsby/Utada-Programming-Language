@@ -1,15 +1,18 @@
 from sly import Lexer
 from sly import Parser
+from formatting import terminal_colors
 import os
 import webbrowser
 
 
 class BasicLexer(Lexer): 
     # Set of token names.   This is always required
-    tokens = { NAME, STRING, NUMBER, OPEN, LINK,
-               WHILE, IF, ELSE, PRINT, FOR, IN,
+    tokens = { NAME, STRING, NUMBER,
+               IF, ELSE,  
+               WHILE, FOR, IN,
                PLUS, MINUS, TIMES, DIVIDE, SQR, 
-               ASSIGN, SQGL, DEF,
+               ASSIGN,
+               PRINT, OPEN,
                APPEND, REMOVE,
                EQ, LT, LE, GT, GE, NE }
 
@@ -20,7 +23,6 @@ class BasicLexer(Lexer):
     ignore = ' \t'
 
     # Regular expression rules for tokens
-    SQGL    = r'~'
     PLUS    = r'\+'
     MINUS   = r'-'
     TIMES   = r'\*'
@@ -40,7 +42,6 @@ class BasicLexer(Lexer):
         t.value = int(t.value)
         return t
 
-    # Identifiers and keywords
     NAME = r'[a-zA-Z_][a-zA-Z0-9_]*'
     STRING = r'"[^"]*"'
 
@@ -74,7 +75,6 @@ class BasicLexer(Lexer):
   
 
 class BasicParser(Parser): 
-    #tokens are passed from lexer to parser 
     tokens = BasicLexer.tokens 
   
     precedence = ( 
@@ -101,8 +101,6 @@ class BasicParser(Parser):
     @_('for_loop')
     def statement(self, p):
         return p.for_loop
-
-    # TODO: functions working
 
     @_('IF expr "," statement ";" ELSE statement')
     def statement(self, p):
@@ -188,7 +186,6 @@ class BasicParser(Parser):
     def expr(self, p):
         return ('cmp', p.comparison_op, p.expr0, p.expr1)
     
-    # Define comparison operators as tokens
     @_('LT', 'GT', 'EQ', 'NE', 'LE', 'GE')
     def comparison_op(self, p):
         return p[0]
@@ -252,7 +249,8 @@ class BasicExecute:
             else: 
                 self.walkTree(node[1]) 
                 self.walkTree(node[2]) 
-  
+
+
         if node[0] == 'num': 
             return node[1] 
   
@@ -261,14 +259,7 @@ class BasicExecute:
         
         if node[0] == 'float':
             return node[1]
-  
-        if node[0] == 'link':
-            link_value = node[1]
-            print(f"DEBUG: Recognized link → {link_value}")
-            return link_value
-        
-        if node[0] == 'path':
-            return os.path.abspath(node[1])  
+
 
         if node[0] == 'add': 
             return self.walkTree(node[1]) + self.walkTree(node[2]) 
@@ -292,7 +283,7 @@ class BasicExecute:
             try: 
                 return self.env[node[1]] 
             except KeyError: 
-                print("Undefined variable '"+node[1]+"' found!") 
+                print(f"{terminal_colors.FAIL}Undefined variable '"+node[1]+"' found!") 
             
 
         if node[0] == 'list_assign':
@@ -300,15 +291,15 @@ class BasicExecute:
             list_values = [self.walkTree(value) for value in node[2]]  # Evaluates each value
             self.env[list_name] = list_values  # Stores the list in the environment
 
+
         if node[0] == 'list_append':
             list_name = node[1]
             value = self.walkTree(node[2])
 
             if list_name in self.env and isinstance(self.env[list_name], list):
                 self.env[list_name].append(value)
-                # print(f"DEBUG: Appended {value} to {list_name} → {self.env[list_name]}")
             else:
-                raise Exception(f"Error: '{list_name}' is not a valid list.")
+                raise Exception(f"{terminal_colors.FAIL}Error: '{list_name}' is not a valid list.")
 
 
         if node[0] == 'list_remove':
@@ -325,9 +316,9 @@ class BasicExecute:
                     # values are stored as tupe so need to find the actual value
                     self.env[list_name] = [item for item in self.env[list_name] if item[1] != value]
                 else:
-                    raise Exception(f"Error: Value {value} not found in list '{list_name}'.")
+                    raise Exception(f"{terminal_colors.FAIL}Error: Value {value} not found in list '{list_name}'.")
             else:
-                raise Exception(f"Error: '{list_name}' is not a valid list.")
+                raise Exception(f"{terminal_colors.FAIL}Error: '{list_name}' is not a valid list.")
 
 
         if node[0] == 'concat':
@@ -340,7 +331,7 @@ class BasicExecute:
             
             # Handle undefined values
             if value is None:
-                print("Error: Undefined variable or value.")
+                print(f"{terminal_colors.FAIL}Error: Undefined variable or value.")
                 return None
             
             if isinstance(value, list):
@@ -389,14 +380,22 @@ class BasicExecute:
             else:
                 self.walkTree(else_stmt)
 
-        if node[0] == 'open':  # Opens link in a browser
+
+        if node[0] == 'open':
             link = node[1]
             if link.startswith('http://') or link.startswith('https://'):
                 try:
                     webbrowser.open(link)  # Open link in the default browser
                     print(f"Successfully opened {link}!")
                 except Exception as e:
-                    print(f"Uh oh! Failed opening link! {link} ({e})")
+                    print(f"{terminal_colors.FAIL}Uh oh! Failed opening link! {link} ({e})")
+            
+            elif os.path.exists(link):  # Check if it's a valid file path
+                try:
+                    os.startfile(link)  # Open the file using the system's default application
+                    print(f"Successfully opened file! {link}")
+                except Exception as e:
+                    print(f"{terminal_colors.FAIL}Error opening file! {link} ({e})")
 
 
         if node[0] == 'for':
@@ -405,7 +404,7 @@ class BasicExecute:
             stmt = node[3]  # Statement inside the loop
 
             if not isinstance(iterable, list):
-                raise Exception(f"Error: {iterable} is not iterable.")
+                raise Exception(f"{terminal_colors.FAIL}Error: {iterable} is not iterable.")
 
             index = 0
             length = len(iterable)
@@ -418,42 +417,3 @@ class BasicExecute:
                 self.env[loop_var] = value  # Store extracted value dynamically
                 self.walkTree(stmt)  # Execute statement inside loop
                 index += 1
-
-        """ if node[0] == 'function_def':
-            self.functions[node[1]] = (node[2], node[3])  # Store (params, statement)
-            print(f"Function '{node[1]}' defined with parameters {node[2]}")
-            return f"Function '{node[1]}' defined"
-        
-        if node[0] == 'function_call':
-            func_name = node[1]
-            args = [self.walkTree(arg) for arg in node[2]]
-
-            if func_name not in self.functions:
-                print(f"DEBUG: Function '{func_name}' NOT FOUND")
-                raise Exception(f"Error: Undefined function '{func_name}'")
-            else:
-                print(f"DEBUG: Function '{func_name}' FOUND with arguments {args}")
-
-            params, stmt = self.functions[func_name]
-
-            if len(params) != len(args):
-                print(f"DEBUG: Argument mismatch! Expected {len(params)}, got {len(args)}")
-                raise Exception(f"Error: Function '{func_name}' expected {len(params)} arguments, got {len(args)}")
-
-            local_env = {}
-
-            # Ensure parameters are properly assigned
-            for i in range(len(params)):
-                param_name = params[i][1] if isinstance(params[i], tuple) and params[i][0] == 'var' else params[i]
-                local_env[param_name] = args[i]
-                print(f"DEBUG: Assigned parameter '{param_name}' = {args[i]}")
-
-            saved_env = self.env
-            self.env = local_env  # Switch to function scope
-
-            print(f"DEBUG: Executing function '{func_name}' body")
-            result = self.walkTree(stmt)
-
-            self.env = saved_env  # Restore global environment
-
-            return result """
