@@ -5,10 +5,10 @@ if __name__ == '__main__':
     lexer = BasicLexer() 
     parser = BasicParser() 
     print('                                               ')
-    print(f'{terminal_colors.HEADER}    Welcome to Utada Programming Language!')
-    print(f'{terminal_colors.HEADER}NOW PLAYING: "Simple and Clean" by Utada Hikaru')
-    print(f'{terminal_colors.HEADER}↻             ◁     ||     ▷                ↺')
-    print(f'{terminal_colors.HEADER}──────────────────────•────────────────────────')
+    print(f'{terminal_colors.HEADER}【 WECOME TO THE UTADA PROGRAMMING LANGUAGE! 】 ')
+    print(f'{terminal_colors.ENDC}NOW PLAYING: "Simple and Clean" by Utada Hikaru')
+    print('↻             ◁     ||     ▷                ↺')
+    print('──────────────────────•────────────────────────')
 
     print(f"""{terminal_colors.HEADER}                                                  
                                                   

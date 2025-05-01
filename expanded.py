@@ -79,7 +79,8 @@ class BasicParser(Parser):
     precedence = ( 
         ('left', PLUS, MINUS), 
         ('left', TIMES, DIVIDE), 
-        ('right', 'UMINUS')
+        ('right', 'UMINUS'),
+        ('right', ASSIGN),
     )
   
     def __init__(self): 
@@ -140,6 +141,10 @@ class BasicParser(Parser):
     @_('OPEN STRING')
     def open_statement(self, p):
         return ('open', p.STRING[1:-1])
+    
+    @_('OPEN expr')
+    def open_statement(self, p):
+        return ('open', p.expr)
     
     @_('open_statement')
     def statement(self, p):
@@ -381,18 +386,27 @@ class BasicExecute:
 
 
         if node[0] == 'open':
-            link = node[1]
+            if node[1] is None:
+                raise Exception(f"{terminal_colors.FAIL}Error: No file or link provided.")
+            
+            if isinstance(node[1], tuple):  # Check if it's a tuple (e.g., ('str', 'link')
+                var_name = node[1][1]  
+                if var_name in self.env:  
+                    link = self.env[var_name]  
+            else:
+                link = node[1]
+
             if link.startswith('http://') or link.startswith('https://'):
                 try:
                     webbrowser.open(link)  # Open link in the default browser
-                    print(f"Successfully opened {link}!")
+                    print(f"{terminal_colors.OKBLUE}Successfully opened {link}!")
                 except Exception as e:
                     print(f"{terminal_colors.FAIL}Uh oh! Failed opening link! {link} ({e})")
             
             elif os.path.exists(link):  # Check if it's a valid file path
                 try:
                     os.startfile(link)  # Open the file using the system's default application
-                    print(f"Successfully opened file! {link}")
+                    print(f"{terminal_colors.OKBLUE}Successfully opened file! {link}")
                 except Exception as e:
                     print(f"{terminal_colors.FAIL}Error opening file! {link} ({e})")
 
