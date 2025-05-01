@@ -51,7 +51,6 @@ class BasicLexer(Lexer):
     NAME['for'] = FOR
     NAME['in'] = IN
     NAME['print'] = PRINT
-    NAME['def'] = DEF
     NAME['app'] = APPEND
     NAME['rem'] = REMOVE
     NAME['open'] = OPEN
