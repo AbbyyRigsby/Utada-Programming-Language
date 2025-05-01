@@ -286,7 +286,7 @@ class BasicExecute:
             try: 
                 return self.env[node[1]] 
             except KeyError: 
-                print(f"{terminal_colors.FAIL}Undefined variable '"+node[1]+"' found!") 
+                print(f"{terminal_colors.FAIL}Undefined variable '"+node[1]+"' found! {terminal_colors.HEADER}") 
             
 
         if node[0] == 'list_assign':
@@ -312,12 +312,14 @@ class BasicExecute:
             # Ensure the list exists and is stored correctly
             if list_name in self.env and isinstance(self.env[list_name], list):
 
-                # Extract only the values from the stored tuples
                 extracted_values = [item[1] if isinstance(item, tuple) and len(item) == 2 else item for item in self.env[list_name]]
 
                 if value in extracted_values:
-                    # values are stored as tupe so need to find the actual value
-                    self.env[list_name] = [item for item in self.env[list_name] if item[1] != value]
+                    # values are stored as tuple so need to find the actual value
+                    try:
+                        self.env[list_name] = [item for item in self.env[list_name] if item[1] != value]
+                    except TypeError:
+                        self.env[list_name] = [item for item in self.env[list_name] if item != value]
                 else:
                     raise Exception(f"{terminal_colors.FAIL}Error: Value {value} not found in list '{list_name}'.{terminal_colors.HEADER}")
             else:
@@ -339,7 +341,10 @@ class BasicExecute:
             
             if isinstance(value, list):
                 for item in value:
-                    print(item[1], end=' ')
+                    try:
+                        print(item[1], end=' ')
+                    except TypeError:
+                        print(item, end=' ')
                 print()
 
             else:
@@ -391,7 +396,9 @@ class BasicExecute:
             if isinstance(node[1], tuple):  # Check if it's a tuple (e.g., ('str', 'link')
                 var_name = node[1][1]  
                 if var_name in self.env:  
-                    link = self.env[var_name]  
+                    link = self.env[var_name]
+                else:
+                    link = node[1][1]  # Fallback to the original value  
             else:
                 link = node[1]
 
